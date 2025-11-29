@@ -1,0 +1,5 @@
+{
+  "name": "FinControl",
+  "description": "Um gerenciador financeiro inteligente com análises de gastos impulsionadas pelo Gemini.",
+  "requestFramePermissions": []
+}
