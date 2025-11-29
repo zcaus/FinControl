@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useFinance } from '../contexts/FinanceContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { CreditCard as CardIcon, Plus, Trash2, X } from 'lucide-react';
 import { CreditCard } from '../types';
 
 const Cards = () => {
   const { cards, addCard, deleteCard, transactions } = useFinance();
+  const { privacyMode } = useTheme();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
@@ -17,6 +19,8 @@ const Cards = () => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
+
+  const blurClass = privacyMode ? "blur-sm transition-all duration-300 select-none" : "transition-all duration-300";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +43,9 @@ const Cards = () => {
   };
 
   const getCardTotal = (id: string) => {
+    // Basic Total: All unpaid transactions attached to this card
+    // In a real scenario, this should filter by Invoice Month logic.
+    // For now, let's show all open debt.
     return transactions
       .filter(t => t.cardId === id && !t.isPaid)
       .reduce((acc, curr) => acc + curr.amount, 0);
@@ -74,12 +81,12 @@ const Cards = () => {
                     </div>
                     
                     <div className="relative z-10">
-                        <p className="text-slate-400 text-xs mb-1">Fatura Atual</p>
-                        <h3 className="text-2xl font-bold mb-4">{formatCurrency(total)}</h3>
+                        <p className="text-slate-400 text-xs mb-1">Fatura Atual (Aberto)</p>
+                        <h3 className={`text-2xl font-bold mb-4 ${blurClass}`}>{formatCurrency(total)}</h3>
                         
                         <div className="flex justify-between text-xs text-slate-400 mb-2">
-                             <span>Disp: {formatCurrency(available)}</span>
-                             <span>Lim: {formatCurrency(card.limit)}</span>
+                             <span className={blurClass}>Disp: {formatCurrency(available)}</span>
+                             <span className={blurClass}>Lim: {formatCurrency(card.limit)}</span>
                         </div>
                         <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
                             <div className={`h-full ${percentUsed > 90 ? 'bg-rose-500' : 'bg-brand-400'}`} style={{ width: `${Math.min(percentUsed, 100)}%` }}></div>
@@ -88,7 +95,7 @@ const Cards = () => {
                     
                     <div className="mt-6 flex justify-between items-center relative z-10">
                          <span className="font-medium uppercase tracking-wider text-sm">{card.name}</span>
-                         <span className="text-xs bg-slate-700 px-2 py-1 rounded">Vence dia {card.dueDay}</span>
+                         <span className="text-xs bg-slate-700 px-2 py-1 rounded">Fecha dia {card.closingDay}</span>
                     </div>
 
                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors"></div>
@@ -124,7 +131,7 @@ const Cards = () => {
                                          <p className="font-medium text-sm text-slate-800 dark:text-slate-200">{t.description}</p>
                                          <p className="text-xs text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</p>
                                      </div>
-                                     <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(t.amount)}</span>
+                                     <span className={`font-bold text-slate-700 dark:text-slate-300 ${blurClass}`}>{formatCurrency(t.amount)}</span>
                                  </div>
                              ))}
                          </div>
@@ -134,7 +141,7 @@ const Cards = () => {
                  </div>
                  
                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
-                      <p className="text-center text-sm text-slate-500 dark:text-slate-400">Total da Fatura: <span className="font-bold text-slate-800 dark:text-white">{formatCurrency(getCardTotal(selectedCardId))}</span></p>
+                      <p className="text-center text-sm text-slate-500 dark:text-slate-400">Total Aberto: <span className={`font-bold text-slate-800 dark:text-white ${blurClass}`}>{formatCurrency(getCardTotal(selectedCardId))}</span></p>
                  </div>
              </div>
         </div>

@@ -5,6 +5,8 @@ type Theme = 'light' | 'dark';
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
+  privacyMode: boolean;
+  togglePrivacyMode: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -14,6 +16,8 @@ export const ThemeProvider = ({ children }: React.PropsWithChildren) => {
     const saved = localStorage.getItem('fincontrol_theme');
     return (saved as Theme) || 'light';
   });
+
+  const [privacyMode, setPrivacyMode] = useState(false);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -26,8 +30,12 @@ export const ThemeProvider = ({ children }: React.PropsWithChildren) => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
+  const togglePrivacyMode = () => {
+    setPrivacyMode(prev => !prev);
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, privacyMode, togglePrivacyMode }}>
       {children}
     </ThemeContext.Provider>
   );

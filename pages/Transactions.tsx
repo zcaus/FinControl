@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { useFinance } from '../contexts/FinanceContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { TransactionType, Transaction } from '../types';
-import { Plus, CheckCircle2, Circle, Trash2, Filter, Layers, Pencil, CalendarClock } from 'lucide-react';
+import { Plus, CheckCircle2, Circle, Trash2, Filter, Layers, Pencil, CalendarClock, Search } from 'lucide-react';
 
 const Transactions = () => {
-  const { transactions, addTransaction, editTransaction, deleteTransaction, toggleTransactionStatus, cards } = useFinance();
+  const { transactions, addTransaction, editTransaction, deleteTransaction, toggleTransactionStatus, cards, getMostFrequentCategory } = useFinance();
+  const { privacyMode } = useTheme();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form State
@@ -27,6 +31,8 @@ const Transactions = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  const blurClass = privacyMode ? "blur-sm transition-all duration-300 select-none" : "transition-all duration-300";
+
   const resetForm = () => {
     setDescription('');
     setAmount('');
@@ -44,6 +50,15 @@ const Transactions = () => {
   const handleOpenModal = () => {
     resetForm();
     setIsModalOpen(true);
+  };
+
+  const handleDescriptionBlur = () => {
+      if (!editingId && description && !category) {
+          const suggested = getMostFrequentCategory(description);
+          if (suggested) {
+              setCategory(suggested);
+          }
+      }
   };
 
   const handleEdit = (t: Transaction) => {
@@ -120,6 +135,7 @@ const Transactions = () => {
 
   const filteredTransactions = transactions
     .filter(t => filter === 'all' || t.type === filter)
+    .filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.category?.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
@@ -134,25 +150,37 @@ const Transactions = () => {
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-        {[
-          { id: 'all', label: 'Todos' }, 
-          { id: 'income', label: 'Receitas' }, 
-          { id: 'expense', label: 'Despesas' }
-        ].map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === f.id 
-                ? 'bg-slate-800 dark:bg-brand-600 text-white' 
-                : 'bg-white dark:bg-zinc-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* Controls: Search + Filter */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                 type="text" 
+                 placeholder="Buscar por nome ou categoria..." 
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+                 className="w-full pl-10 pr-4 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {[
+            { id: 'all', label: 'Todos' }, 
+            { id: 'income', label: 'Receitas' }, 
+            { id: 'expense', label: 'Despesas' }
+            ].map(f => (
+            <button
+                key={f.id}
+                onClick={() => setFilter(f.id as any)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
+                filter === f.id 
+                    ? 'bg-slate-800 dark:bg-brand-600 text-white' 
+                    : 'bg-white dark:bg-zinc-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                }`}
+            >
+                {f.label}
+            </button>
+            ))}
+          </div>
       </div>
 
       {/* List */}
@@ -168,16 +196,17 @@ const Transactions = () => {
                   
                   <div>
                     <p className={`font-medium text-slate-800 dark:text-slate-200 ${t.isPaid ? '' : 'text-slate-500 dark:text-slate-500'}`}>{t.description}</p>
-                    <div className="flex gap-2 text-xs text-slate-400">
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-400 mt-1">
                        <span>{new Date(t.date).toLocaleDateString('pt-BR')}</span>
                        {t.cardId && <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded">Cartão</span>}
                        {t.isRecurring && <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded">Fixo</span>}
+                       {t.category && <span className="bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">{t.category}</span>}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <span className={`font-bold ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                  <span className={`font-bold ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'} ${blurClass}`}>
                     {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                   </span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -210,7 +239,14 @@ const Transactions = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Descrição</label>
-                <input required value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="Ex: Supermercado" />
+                <input 
+                    required 
+                    value={description} 
+                    onChange={e => setDescription(e.target.value)} 
+                    onBlur={handleDescriptionBlur}
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500" 
+                    placeholder="Ex: Supermercado" 
+                />
               </div>
               
               <div className="grid grid-cols-2 gap-4">

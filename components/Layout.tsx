@@ -1,14 +1,14 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, CreditCard, List, LogOut, Sparkles, Moon, Sun, Settings } from 'lucide-react';
+import { Home, CreditCard, List, LogOut, Sparkles, Moon, Sun, Settings, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Layout = () => {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   const { summary } = useFinance();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, privacyMode, togglePrivacyMode } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -28,6 +28,8 @@ const Layout = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  const blurClass = privacyMode ? "blur-sm transition-all duration-300 select-none" : "transition-all duration-300";
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-black transition-colors duration-300 flex flex-col md:flex-row">
       
@@ -42,6 +44,9 @@ const Layout = () => {
                <span className="font-bold text-lg tracking-tight">FinControl</span>
             </div>
             <div className="flex items-center gap-4">
+                <button onClick={togglePrivacyMode} className="text-slate-400 hover:text-brand-500 dark:hover:text-white transition-colors">
+                   {privacyMode ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
                 <button onClick={toggleTheme} className="text-slate-400 hover:text-brand-500 dark:hover:text-white transition-colors">
                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
                 </button>
@@ -57,11 +62,11 @@ const Layout = () => {
              <div className="space-y-4">
                 <div>
                    <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">Receitas</p>
-                   <p className="text-emerald-600 dark:text-emerald-400 font-bold text-lg transition-colors">{formatCurrency(summary.income)}</p>
+                   <p className={`text-emerald-600 dark:text-emerald-400 font-bold text-lg ${blurClass}`}>{formatCurrency(summary.income)}</p>
                 </div>
                 <div>
                    <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">Despesas</p>
-                   <p className="text-rose-600 dark:text-rose-400 font-bold text-lg transition-colors">{formatCurrency(summary.expense)}</p>
+                   <p className={`text-rose-600 dark:text-rose-400 font-bold text-lg ${blurClass}`}>{formatCurrency(summary.expense)}</p>
                 </div>
              </div>
 
@@ -69,11 +74,11 @@ const Layout = () => {
              <div className="text-right space-y-4">
                 <div>
                    <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">Saldo Atual</p>
-                   <p className="text-slate-900 dark:text-white font-bold text-3xl tracking-tight transition-colors">{formatCurrency(summary.balance)}</p>
+                   <p className={`text-slate-900 dark:text-white font-bold text-3xl tracking-tight ${blurClass}`}>{formatCurrency(summary.balance)}</p>
                 </div>
                 <div>
                    <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">Previsão do Mês</p>
-                   <p className={`font-bold text-lg transition-colors ${summary.forecast >= 0 ? 'text-blue-600 dark:text-blue-300' : 'text-rose-500 dark:text-rose-300'}`}>
+                   <p className={`font-bold text-lg ${summary.forecast >= 0 ? 'text-blue-600 dark:text-blue-300' : 'text-rose-500 dark:text-rose-300'} ${blurClass}`}>
                      {formatCurrency(summary.forecast)}
                    </p>
                 </div>
