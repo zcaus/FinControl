@@ -63,7 +63,7 @@ const Transactions = () => {
 
   const handleEdit = (t: Transaction) => {
     setEditingId(t.id);
-    setDescription(t.description);
+    setDescription(t.description.replace(/\s\(\d+\/\d+\)$/, '')); // Remove (1/12) for clean editing if desired, though usually explicit
     setAmount(t.amount.toString());
     setType(t.type);
     setDate(t.date);
@@ -97,18 +97,32 @@ const Transactions = () => {
         // Handle Installments
         const numInstallments = parseInt(installments);
         const installmentAmount = numericAmount / numInstallments;
-        const startDate = new Date(date);
+        
+        // Use parsing to ensure we don't have timezone shifts
+        const [y, m, d] = date.split('-').map(Number);
+        // Create date object at noon to avoid DST/Timezone rollovers
+        const startDateObj = new Date(y, m - 1, d, 12, 0, 0);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize today to start of day
 
         for (let i = 0; i < numInstallments; i++) {
-          const installmentDate = new Date(startDate);
-          installmentDate.setMonth(startDate.getMonth() + i);
+          const currentInstDate = new Date(startDateObj);
+          currentInstDate.setMonth(startDateObj.getMonth() + i);
           
+          // Check if this installment is in the past
+          const comparisonDate = new Date(currentInstDate);
+          comparisonDate.setHours(0,0,0,0);
+          
+          // If date is strictly less than today, consider it paid (history)
+          const shouldBePaid = comparisonDate < today;
+
           addTransaction({
             description: `${description} (${i + 1}/${numInstallments})`,
             amount: installmentAmount,
             type,
-            date: installmentDate.toISOString().split('T')[0],
-            isPaid: false, // Future installments usually not paid yet
+            date: currentInstDate.toISOString().split('T')[0],
+            isPaid: shouldBePaid, // Auto-mark past installments as paid
             category,
             cardId: cardId || undefined,
             isRecurring: false

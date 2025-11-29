@@ -87,8 +87,15 @@ const Layout = () => {
       </div>
 
       {/* Main Content Area - Padded top to account for fixed header */}
-      <main className="flex-1 min-h-screen pt-[260px] pb-24 px-4 md:px-8 max-w-5xl mx-auto w-full">
-        <Outlet />
+      <main className="flex-1 min-h-screen pt-[260px] pb-24 px-4 md:px-8 max-w-5xl mx-auto w-full flex flex-col">
+        <div className="flex-1">
+            <Outlet />
+        </div>
+        <footer className="mt-12 text-center pb-4">
+            <p className="text-xs font-medium text-slate-400 dark:text-zinc-700">
+                Criado por Cauã Moreira
+            </p>
+        </footer>
       </main>
 
       {/* Mobile Bottom Nav */}
