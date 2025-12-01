@@ -5,7 +5,7 @@ import { TransactionType, Transaction } from '../types';
 import { Plus, CheckCircle2, Circle, Trash2, Filter, Layers, Pencil, CalendarClock, Search } from 'lucide-react';
 
 const Transactions = () => {
-  const { transactions, addTransaction, editTransaction, deleteTransaction, toggleTransactionStatus, cards, getMostFrequentCategory } = useFinance();
+  const { filteredTransactions, addTransaction, editTransaction, deleteTransaction, toggleTransactionStatus, cards, getMostFrequentCategory } = useFinance();
   const { privacyMode } = useTheme();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -63,7 +63,7 @@ const Transactions = () => {
 
   const handleEdit = (t: Transaction) => {
     setEditingId(t.id);
-    setDescription(t.description.replace(/\s\(\d+\/\d+\)$/, '')); // Remove (1/12) for clean editing if desired, though usually explicit
+    setDescription(t.description.replace(/\s\(\d+\/\d+\)$/, '')); 
     setAmount(t.amount.toString());
     setType(t.type);
     setDate(t.date);
@@ -71,7 +71,7 @@ const Transactions = () => {
     setCategory(t.category);
     setCardId(t.cardId || '');
     setIsRecurring(t.isRecurring || false);
-    setIsInstallment(false); // Can't turn existing into installments easily in edit mode
+    setIsInstallment(false);
     setIsModalOpen(true);
   };
 
@@ -80,7 +80,6 @@ const Transactions = () => {
     const numericAmount = parseFloat(amount);
     
     if (editingId) {
-      // Edit existing
       editTransaction(editingId, {
         description,
         amount: numericAmount,
@@ -92,29 +91,24 @@ const Transactions = () => {
         isRecurring
       });
     } else {
-      // Create new
       if (type === 'expense' && isInstallment && parseInt(installments) > 1) {
-        // Handle Installments
         const numInstallments = parseInt(installments);
         const installmentAmount = numericAmount / numInstallments;
         
-        // Use parsing to ensure we don't have timezone shifts
         const [y, m, d] = date.split('-').map(Number);
-        // Create date object at noon to avoid DST/Timezone rollovers
         const startDateObj = new Date(y, m - 1, d, 12, 0, 0);
         
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Normalize today to start of day
+        today.setHours(0, 0, 0, 0);
 
         for (let i = 0; i < numInstallments; i++) {
           const currentInstDate = new Date(startDateObj);
           currentInstDate.setMonth(startDateObj.getMonth() + i);
           
-          // Check if this installment is in the past
           const comparisonDate = new Date(currentInstDate);
           comparisonDate.setHours(0,0,0,0);
           
-          // If date is strictly less than today, consider it paid (history)
+          // If installment date is strictly before today, it's paid history.
           const shouldBePaid = comparisonDate < today;
 
           addTransaction({
@@ -122,14 +116,13 @@ const Transactions = () => {
             amount: installmentAmount,
             type,
             date: currentInstDate.toISOString().split('T')[0],
-            isPaid: shouldBePaid, // Auto-mark past installments as paid
+            isPaid: shouldBePaid, 
             category,
             cardId: cardId || undefined,
             isRecurring: false
           });
         }
       } else {
-        // Normal single transaction
         addTransaction({
           description,
           amount: numericAmount,
@@ -147,7 +140,7 @@ const Transactions = () => {
     resetForm();
   };
 
-  const filteredTransactions = transactions
+  const displayTransactions = filteredTransactions
     .filter(t => filter === 'all' || t.type === filter)
     .filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.category?.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -199,9 +192,9 @@ const Transactions = () => {
 
       {/* List */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-        {filteredTransactions.length > 0 ? (
+        {displayTransactions.length > 0 ? (
           <div className="divide-y divide-slate-100 dark:divide-zinc-800">
-            {filteredTransactions.map(t => (
+            {displayTransactions.map(t => (
               <div key={t.id} className="p-4 hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <button onClick={() => toggleTransactionStatus(t.id)} className={`transition-colors ${t.isPaid ? 'text-brand-500' : 'text-slate-300 dark:text-zinc-600 hover:text-brand-500'}`}>
@@ -238,12 +231,12 @@ const Transactions = () => {
         ) : (
           <div className="p-12 text-center text-slate-400 dark:text-slate-600">
             <Filter size={48} className="mx-auto mb-4 opacity-20" />
-            <p>Nenhum lançamento encontrado.</p>
+            <p>Nenhum lançamento encontrado neste mês.</p>
           </div>
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-end md:items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 fade-in duration-300 border border-slate-100 dark:border-zinc-700 max-h-[90vh] overflow-y-auto">
@@ -277,7 +270,6 @@ const Transactions = () => {
                 </div>
               </div>
 
-              {/* Installment Section - Only for new expenses */}
               {!editingId && type === 'expense' && (
                 <div className="bg-slate-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-slate-100 dark:border-zinc-700/50">
                   <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium cursor-pointer mb-2">

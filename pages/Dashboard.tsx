@@ -5,7 +5,7 @@ import { ArrowUpCircle, ArrowDownCircle, Filter, TrendingUp, CalendarClock } fro
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
-  const { summary, transactions, dailyForecast } = useFinance();
+  const { summary, filteredTransactions, dailyForecast } = useFinance();
   const { privacyMode } = useTheme();
 
   const formatCurrency = (val: number) => {
@@ -14,8 +14,8 @@ const Dashboard = () => {
 
   const blurClass = privacyMode ? "blur-sm transition-all duration-300 select-none" : "transition-all duration-300";
 
-  // Calculate Fixed Costs (Recurring)
-  const fixedCosts = transactions
+  // Calculate Fixed Costs (Recurring) from filtered view
+  const fixedCosts = filteredTransactions
     .filter(t => t.isRecurring && t.type === 'expense')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -83,9 +83,9 @@ const Dashboard = () => {
 
         {/* Recent Activity */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-zinc-800 flex flex-col">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Atividade Recente</h3>
-          <div className="space-y-4 flex-1 overflow-hidden">
-            {transactions.slice(0, 5).map((t) => (
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Lançamentos do Mês</h3>
+          <div className="space-y-4 flex-1 overflow-y-auto max-h-[250px] no-scrollbar">
+            {filteredTransactions.slice(0, 5).map((t) => (
               <div key={t.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400'}`}>
@@ -101,10 +101,10 @@ const Dashboard = () => {
                 </span>
               </div>
             ))}
-            {transactions.length === 0 && (
+            {filteredTransactions.length === 0 && (
               <div className="text-center text-slate-400 dark:text-slate-600 text-sm py-12">
                  <Filter size={32} className="mx-auto mb-3 opacity-20" />
-                 <p>Nenhum lançamento ainda.</p>
+                 <p>Nenhum lançamento neste mês.</p>
               </div>
             )}
           </div>
@@ -118,13 +118,16 @@ const Dashboard = () => {
              <p className={`text-xl font-bold text-slate-700 dark:text-slate-200 ${blurClass}`}>{formatCurrency(summary.pendingIncome)}</p>
           </div>
           <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
-             <p className="text-xs text-slate-400 mb-1">A Pagar</p>
+             <p className="text-xs text-slate-400 mb-1">A Pagar (Carteira)</p>
              <p className={`text-xl font-bold text-slate-700 dark:text-slate-200 ${blurClass}`}>{formatCurrency(summary.pendingExpense)}</p>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 col-span-2">
+          <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
+             <p className="text-xs text-slate-400 mb-1">Fatura Cartões</p>
+             <p className={`text-xl font-bold text-rose-500 dark:text-rose-400 ${blurClass}`}>{formatCurrency(summary.cardInvoiceTotal)}</p>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
              <div className="flex justify-between items-center mb-1">
-                 <p className="text-xs text-slate-400 flex items-center gap-1"><CalendarClock size={12}/> Custos Fixos (Assinaturas)</p>
-                 <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 rounded-full">Mensal</span>
+                 <p className="text-xs text-slate-400 flex items-center gap-1"><CalendarClock size={12}/> Fixos (Mensal)</p>
              </div>
              <p className={`text-xl font-bold text-slate-700 dark:text-slate-200 ${blurClass}`}>{formatCurrency(fixedCosts)}</p>
           </div>

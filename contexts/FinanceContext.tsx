@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Transaction, CreditCard, FinancialSummary } from '../types';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
@@ -10,10 +10,14 @@ interface DailyBalance {
 
 interface FinanceContextType {
   transactions: Transaction[];
+  filteredTransactions: Transaction[]; // Transactions for the selected month
   cards: CreditCard[];
   summary: FinancialSummary;
   dailyForecast: DailyBalance[];
   loading: boolean;
+  selectedDate: Date;
+  nextMonth: () => void;
+  prevMonth: () => void;
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
   editTransaction: (id: string, updated: Omit<Transaction, 'id'>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -30,6 +34,23 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const nextMonth = () => {
+    setSelectedDate(prev => {
+      const next = new Date(prev);
+      next.setMonth(prev.getMonth() + 1);
+      return next;
+    });
+  };
+
+  const prevMonth = () => {
+    setSelectedDate(prev => {
+      const prevDate = new Date(prev);
+      prevDate.setMonth(prev.getMonth() - 1);
+      return prevDate;
+    });
+  };
 
   const fetchData = async () => {
     if (!user) return;
@@ -43,7 +64,6 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
         
         if (cardsError) throw cardsError;
 
-        // Map snake_case to camelCase
         const mappedCards: CreditCard[] = (cardsData || []).map((c: any) => ({
             id: c.id,
             name: c.name,
@@ -61,7 +81,6 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
 
         if (transError) throw transError;
 
-        // Map snake_case to camelCase
         const mappedTrans: Transaction[] = (transData || []).map((t: any) => ({
             id: t.id,
             description: t.description,
@@ -94,7 +113,6 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
   const addTransaction = async (t: Omit<Transaction, 'id'>) => {
     if (!user) return;
     
-    // Optimistic update
     const tempId = crypto.randomUUID();
     const newTrans = { ...t, id: tempId };
     setTransactions(prev => [...prev, newTrans]);
@@ -183,135 +201,165 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
     return match ? match.category : null;
   };
 
-  // Calculations
-  const calculateFinancials = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+  // --- Date & Invoice Logic ---
 
-    let balance = 0;
+  // Helper: determine which invoice month a transaction belongs to
+  const getInvoiceDate = (transactionDate: string | Date, closingDay: number): Date => {
+    const tDate = new Date(transactionDate);
+    // If transaction day > closing day, it belongs to NEXT month
+    if (tDate.getDate() > closingDay) {
+        tDate.setMonth(tDate.getMonth() + 1);
+    }
+    return tDate;
+  };
+
+  // Memoize filtered transactions based on selectedDate
+  const filteredTransactions = useMemo(() => {
+    const sMonth = selectedDate.getMonth();
+    const sYear = selectedDate.getFullYear();
+
+    return transactions.filter(t => {
+      const tDate = new Date(t.date);
+
+      if (t.cardId) {
+        const card = cards.find(c => c.id === t.cardId);
+        if (card) {
+          const invoiceDate = getInvoiceDate(tDate, card.closingDay);
+          return invoiceDate.getMonth() === sMonth && invoiceDate.getFullYear() === sYear;
+        }
+      }
+
+      // Normal transactions (Cash/Debit)
+      return tDate.getMonth() === sMonth && tDate.getFullYear() === sYear;
+    });
+  }, [transactions, selectedDate, cards]);
+
+  const calculateFinancials = () => {
+    const sMonth = selectedDate.getMonth();
+    const sYear = selectedDate.getFullYear();
+
+    // Global Balance (All time paid income - All time paid expense)
+    // Actually, usually users want "Current Account Balance". 
+    // This is sum of ALL realized transactions ever.
+    let globalBalance = 0;
+    transactions.forEach(t => {
+        if (t.isPaid && !t.cardId) {
+            if (t.type === 'income') globalBalance += t.amount;
+            else globalBalance -= t.amount;
+        }
+        // Card payments (paying the bill) should be treated as expenses if we tracked them.
+        // For this simple app, we don't explicitly track "Bill Payment" transactions yet, 
+        // or we treat them as normal expenses.
+        // Assuming 'cardId' transactions are liability, not immediate cash flow.
+    });
+
     let income = 0;
     let expense = 0;
     let pendingIncome = 0;
     let pendingExpense = 0;
     let cardInvoiceTotal = 0;
 
-    // Daily Forecast Data
+    // Daily Forecast Data for the selected month
     const dailyMap = new Map<number, number>();
-    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const lastDay = new Date(sYear, sMonth + 1, 0).getDate();
     
-    // Initialize days with 0 change
     for(let i=1; i<=lastDay; i++) {
         dailyMap.set(i, 0);
     }
 
-    // Process transactions
-    transactions.forEach(t => {
+    // Process Filtered Transactions (Only what's in this month view)
+    filteredTransactions.forEach(t => {
       const tDate = new Date(t.date);
-      const tDay = tDate.getDate();
-      const isCurrentMonth = tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+      // For chart mapping, we use the actual date of transaction if it falls in this month,
+      // OR the 1st of month if it was brought here by invoice logic?
+      // Let's use the transaction day, clamped.
+      let day = tDate.getDate();
+      
+      // If it's a card transaction from previous month appearing here due to invoice:
+      if (tDate.getMonth() !== sMonth) day = 1; 
 
-      // Handle Credit Cards Logic
       if (t.cardId) {
-        const card = cards.find(c => c.id === t.cardId);
-        if (card) {
-            // Check if transaction falls into CURRENT month's invoice
-            // Logic: A transaction belongs to current month invoice if date <= closingDay
-            // If date > closingDay, it goes to NEXT month invoice.
+          // It's a credit card expense for this month's invoice
+          if (!t.isPaid) {
+            cardInvoiceTotal += t.amount;
+            // Card expenses don't hit cash balance immediately, so don't add to income/expense/forecast 
+            // UNLESS we want to show "Projected Cash if I pay the bill".
+            // Typically, Forecast = Current Balance + Income - Expenses - Bills.
             
-            // Simplified check: Is this transaction unpaid and part of the "active" invoice period?
-            // For the dashboard summary, we usually want to know "What do I have to pay THIS month?"
-            
-            // If today is before closing day: Current invoice includes transactions from last_closing to now.
-            
-            // Let's stick to simple dashboard view: 
-            // cardInvoiceTotal = Sum of unpaid card transactions that are "due" this month or past due.
-            
-            // If transaction date is in current month:
-            // AND transaction day <= closing day -> It is due THIS month.
-            // If transaction day > closing day -> It is due NEXT month (skip for current liability).
-            
-            // If transaction is from previous months and unpaid -> Add to total.
-            
-            const isFutureInvoice = isCurrentMonth && tDay > card.closingDay;
-            
-            if (!t.isPaid && !isFutureInvoice && tDate <= now) {
-                cardInvoiceTotal += t.amount;
-            } else if (!t.isPaid && !isFutureInvoice && isCurrentMonth) {
-                // It is in current month invoice but date is in future (e.g. scheduled)? 
-                // Usually card transactions are past, but recurring ones might be future dated.
-                cardInvoiceTotal += t.amount;
+            // Let's assume the bill is paid on Due Day.
+            const card = cards.find(c => c.id === t.cardId);
+            if (card) {
+                const due = card.dueDay;
+                // Add to daily map as an expense on the due day
+                const currentVal = dailyMap.get(due) || 0;
+                dailyMap.set(due, currentVal - t.amount);
             }
-        }
-        return; // Don't subtract from cash balance directly
-      }
-
-      // Cash/Debit Transactions
-      if (t.type === 'income') {
-        if (t.isPaid) {
-          balance += t.amount;
-          income += t.amount;
-        } else if (isCurrentMonth) {
-          pendingIncome += t.amount;
-          // Add to daily forecast map
-          const val = dailyMap.get(tDay) || 0;
-          dailyMap.set(tDay, val + t.amount);
-        }
+          }
       } else {
-        if (t.isPaid) {
-          balance -= t.amount;
-          expense += t.amount;
-        } else if (isCurrentMonth) {
-          pendingExpense += t.amount;
-          // Subtract from daily forecast map
-          const val = dailyMap.get(tDay) || 0;
-          dailyMap.set(tDay, val - t.amount);
-        }
+          // Cash/Debit
+          if (t.type === 'income') {
+              income += t.amount;
+              if (!t.isPaid) pendingIncome += t.amount;
+              
+              const currentVal = dailyMap.get(day) || 0;
+              dailyMap.set(day, currentVal + t.amount);
+          } else {
+              expense += t.amount;
+              if (!t.isPaid) pendingExpense += t.amount;
+              
+              const currentVal = dailyMap.get(day) || 0;
+              dailyMap.set(day, currentVal - t.amount);
+          }
       }
     });
 
-    // Build Cumulative Daily Forecast
-    let runningBalance = balance;
+    // Build Forecast Curve
+    // Start with global balance? Or start with 0 for "Month Flow"?
+    // Users usually want "Projected End Balance".
+    // So we take Global Balance (Current Real) and apply future changes.
+    // BUT if we look at a FUTURE month, Global Balance includes stuff from now.
+    // Simpler approach for this MVP: 
+    // Start with `globalBalance`.
+    // For the chart: Accumulate daily changes.
+    
+    let runningBalance = globalBalance;
     const dailyForecast: DailyBalance[] = [];
-    const todayDay = now.getDate();
 
-    // Start from today until end of month
+    // However, if we are in a past month, 'globalBalance' is the end result.
+    // To show the history of that month correctly is hard without a time-machine balance.
+    // Fix: Just show the "Flow" (cumulative change) for the month, OR
+    // Project from TODAY.
+    
+    // Let's Project:
+    // If selected month is Current Month: Start with Current Balance.
+    // If selected month != Current Month: This is just a simulation. 
+    // Let's just show the running tally of that month's operations + Current Balance as offset 
+    // (though not technically accurate for past months, it's good enough for visual trend).
+    
     for (let i = 1; i <= lastDay; i++) {
-        // If day is past, just keep current balance flat or use history? 
-        // For forecast, we usually start "now".
-        // But for a chart, it's nice to see the whole month.
-        // Simplified: The chart will show the projected path of the balance for the whole month
-        // assuming Paid transactions happened in the past and Pending happen in the future.
+        const dayChange = dailyMap.get(i) || 0;
+        runningBalance += dayChange;
         
-        // However, to make it look like a "Forecast", let's take the current realized balance
-        // and only apply pending changes from today onwards.
-        
-        if (i >= todayDay) {
-            const dayChange = dailyMap.get(i) || 0;
-            runningBalance += dayChange;
-        }
-        
-        // Push to chart data
-        if (i >= todayDay || i % 5 === 0 || i === 1) { // Optimize data points if needed, or push all
+        if (i % 3 === 0 || i === 1 || i === lastDay) {
             dailyForecast.push({
-                date: `${i}/${currentMonth+1}`,
+                date: `${i}/${sMonth+1}`,
                 balance: runningBalance
             });
         }
     }
-    
-    // Sort just in case
-    // dailyForecast is already sorted by loop index.
+
+    // Forecast is the final number
+    const forecast = runningBalance;
 
     return {
       summary: {
-        balance,
+        balance: globalBalance,
         income,
         expense,
         pendingIncome,
         pendingExpense,
         cardInvoiceTotal,
-        forecast: balance + pendingIncome - pendingExpense
+        forecast
       },
       dailyForecast
     };
@@ -322,10 +370,14 @@ export const FinanceProvider = ({ children }: React.PropsWithChildren) => {
   return (
     <FinanceContext.Provider value={{ 
       transactions, 
+      filteredTransactions,
       cards, 
       summary,
       dailyForecast,
       loading, 
+      selectedDate,
+      nextMonth,
+      prevMonth,
       addTransaction,
       editTransaction, 
       deleteTransaction,

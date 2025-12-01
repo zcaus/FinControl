@@ -5,7 +5,7 @@ import { CreditCard as CardIcon, Plus, Trash2, X } from 'lucide-react';
 import { CreditCard } from '../types';
 
 const Cards = () => {
-  const { cards, addCard, deleteCard, transactions } = useFinance();
+  const { cards, addCard, deleteCard, filteredTransactions } = useFinance();
   const { privacyMode } = useTheme();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -43,16 +43,15 @@ const Cards = () => {
   };
 
   const getCardTotal = (id: string) => {
-    // Basic Total: All unpaid transactions attached to this card
-    // In a real scenario, this should filter by Invoice Month logic.
-    // For now, let's show all open debt.
-    return transactions
+    // Uses filteredTransactions which already respects the invoice month logic
+    return filteredTransactions
       .filter(t => t.cardId === id && !t.isPaid)
       .reduce((acc, curr) => acc + curr.amount, 0);
   };
 
   const getCardTransactions = (id: string) => {
-      return transactions.filter(t => t.cardId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Show transactions relevant to THIS month's invoice
+      return filteredTransactions.filter(t => t.cardId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   return (
@@ -81,7 +80,7 @@ const Cards = () => {
                     </div>
                     
                     <div className="relative z-10">
-                        <p className="text-slate-400 text-xs mb-1">Fatura Atual (Aberto)</p>
+                        <p className="text-slate-400 text-xs mb-1">Fatura do Mês (Aberto)</p>
                         <h3 className={`text-2xl font-bold mb-4 ${blurClass}`}>{formatCurrency(total)}</h3>
                         
                         <div className="flex justify-between text-xs text-slate-400 mb-2">
@@ -118,7 +117,7 @@ const Cards = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
              <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-3xl p-6 shadow-2xl h-[80vh] flex flex-col border border-slate-100 dark:border-zinc-700">
                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-bold text-slate-800 dark:text-white">Lançamentos do Cartão</h3>
+                     <h3 className="text-xl font-bold text-slate-800 dark:text-white">Fatura do Mês</h3>
                      <button onClick={() => setSelectedCardId(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-full text-slate-500 dark:text-slate-400"><X size={20} /></button>
                  </div>
                  
@@ -136,12 +135,12 @@ const Cards = () => {
                              ))}
                          </div>
                      ) : (
-                         <p className="text-center text-slate-400 mt-10">Nenhuma compra neste cartão.</p>
+                         <p className="text-center text-slate-400 mt-10">Nenhuma compra nesta fatura.</p>
                      )}
                  </div>
                  
                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
-                      <p className="text-center text-sm text-slate-500 dark:text-slate-400">Total Aberto: <span className={`font-bold text-slate-800 dark:text-white ${blurClass}`}>{formatCurrency(getCardTotal(selectedCardId))}</span></p>
+                      <p className="text-center text-sm text-slate-500 dark:text-slate-400">Total Fatura: <span className={`font-bold text-slate-800 dark:text-white ${blurClass}`}>{formatCurrency(getCardTotal(selectedCardId))}</span></p>
                  </div>
              </div>
         </div>
