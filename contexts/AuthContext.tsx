@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }: React.PropsWithChildren) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const userData: User = {
+            id: session.user.id,
             email: session.user.email || '',
             name: session.user.user_metadata?.name || 'Usuário',
             preferences: session.user.user_metadata?.preferences || { language: 'pt-BR', notifications: true }
@@ -36,6 +37,7 @@ export const AuthProvider = ({ children }: React.PropsWithChildren) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
             const userData: User = {
+                id: session.user.id,
                 email: session.user.email || '',
                 name: session.user.user_metadata?.name || 'Usuário',
                 preferences: session.user.user_metadata?.preferences || { language: 'pt-BR', notifications: true }

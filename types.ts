@@ -10,6 +10,7 @@ export interface Transaction {
   category: string;
   cardId?: string; // If attached to a credit card
   isRecurring?: boolean;
+  recurringId?: string; // Links recurring transactions together
 }
 
 export interface CreditCard {
@@ -27,6 +28,7 @@ export interface UserPreferences {
 }
 
 export interface User {
+  id: string;
   email: string;
   name: string;
   preferences?: UserPreferences;
